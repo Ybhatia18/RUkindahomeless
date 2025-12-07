@@ -50,18 +50,16 @@ errors = 0
 
 for idx, row in df.iterrows():
     try:
-        # Adjust these column names to match YOUR CSV
-        # Common variations: 'Rent' vs 'rent', 'BR' vs 'Bedrooms', etc.
         cursor.execute("""
             INSERT INTO listings (address, monthly_rent, bedrooms, bathrooms, square_feet, source, listing_url)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
-            str(row['address']),                    # adjust if your column is named differently
-            float(row['Rent']),                     # adjust: might be 'rent' or 'monthly_rent'
-            int(row['BR']),                         # adjust: might be 'bedrooms' or 'Bedrooms'
-            float(row['Ba']),                       # adjust: might be 'bathrooms' or 'Bathrooms'
-            int(row['sqft']),                       # adjust: might be 'square_feet' or 'Sqft'
-            str(row['source']),                     # adjust if needed
+            str(row['address']),
+            float(str(row['rent']).replace(',', '')),  # Fixed: 'rent' instead of 'Rent', handle commas
+            int(row['BR']),
+            float(row['Ba']),
+            int(row['sqft']),
+            str(row['source']),
             str(row['url']) if 'url' in row and pd.notna(row['url']) else None
         ))
         inserted += 1
@@ -84,8 +82,11 @@ cursor.execute("""
     INSERT INTO listing_stats (listing_id, price_per_sqft, price_per_bedroom, avg_rent_for_bedrooms, is_above_average, value_score)
     SELECT 
         l.listing_id,
-        ROUND(l.monthly_rent::numeric / l.square_feet, 2),
-        ROUND(l.monthly_rent::numeric / l.bedrooms, 2),
+        ROUND(l.monthly_rent::numeric / NULLIF(l.square_feet, 0), 2),
+        CASE 
+            WHEN l.bedrooms > 0 THEN ROUND(l.monthly_rent::numeric / l.bedrooms, 2)
+            ELSE l.monthly_rent  -- For studios (0 BR), just use the rent itself
+        END,
         avg_prices.avg_rent,
         CASE WHEN l.monthly_rent > avg_prices.avg_rent THEN TRUE ELSE FALSE END,
         CASE 
